@@ -38,7 +38,7 @@ public class SpawnAround : MonoBehaviour
                 addOffset = Vector2.right;
             }
             
-            Instantiate(EnemyPrefab, (Vector2) transform.position + addOffset, Quaternion.identity);
+            GameMaster.Instance.enemies.Add(Instantiate(EnemyPrefab, (Vector2) transform.position + addOffset, Quaternion.identity));
             yield return new WaitForSeconds(spawnDelay);
         }
     }

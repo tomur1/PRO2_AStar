@@ -1,16 +1,4 @@
-﻿/* 
-    ------------------- Code Monkey -------------------
-
-    Thank you for downloading this package
-    I hope you find it useful in your projects
-    If you have any questions let me know
-    Cheers!
-
-               unitycodemonkey.com
-    --------------------------------------------------
- */
-
-using UnityEngine;
+﻿using UnityEngine;
 
 
     public class PathNode {
@@ -30,7 +18,7 @@ using UnityEngine;
             this.grid = grid;
             this.x = x;
             this.y = y;
-            isWalkable = GameMaster.Instance.maze[x][y] != 1;
+            isWalkable = !(GameMaster.Instance.maze[x][y] == 1 || GameMaster.Instance.maze[x][y] == 4);
         }
 
         public void CalculateFCost() {

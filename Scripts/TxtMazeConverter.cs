@@ -3,14 +3,14 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using Random = System.Random;
 
 //0 is empty
 //1 is wall
 //2 is start
 //3 is end
 //4 is spawner
-//5 is player
-//6 is enemy
+//5 is potion
 
 public class TxtMazeConverter
 {
@@ -59,5 +59,57 @@ public class TxtMazeConverter
         }
 
         return convertedMaze;
-    } 
+    }
+
+    public static void AddSpawners(List<int[]> maze, int numberOfSpawners)
+    {
+        var gameMaster = GameMaster.Instance;
+        
+        List<Vector2> takenPlaces = new List<Vector2>();
+        var rand = new Random();
+        for (int i = 0; i < numberOfSpawners; i++)
+        {
+            // find a place
+            Vector2 coordToTake = new Vector2();
+            do
+            {
+                var x = rand.Next(2, gameMaster.width - 3);
+                var y = rand.Next(2, gameMaster.height - 3);
+                coordToTake = new Vector2(x, y);
+            } while (takenPlaces.Contains(coordToTake));
+
+            var coordsAround = gameMaster.CoordsAroundPoint(coordToTake);
+            foreach (var coordinateToClear in coordsAround)
+            {
+                var coordinateToClearInt = Vector2Int.FloorToInt(coordinateToClear);
+                maze[coordinateToClearInt.x][coordinateToClearInt.y] = 0;
+            }
+
+            takenPlaces.Add(coordToTake);
+            maze[(int) coordToTake.x][(int) coordToTake.y] = 4;
+        }
+    }
+
+    public static void AddPotions(List<int[]> maze, int numberOfPotions)
+    {
+        var gameMaster = GameMaster.Instance;
+        List<Vector2> takenPlaces = new List<Vector2>();
+        var rand = new Random();
+        for (int i = 0; i < numberOfPotions; i++)
+        {
+            // find a place
+            Vector2 coordToTake = new Vector2();
+            do
+            {
+                var x = rand.Next(1, gameMaster.width - 2);
+                var y = rand.Next(1, gameMaster.height - 2);
+                coordToTake = new Vector2(x, y);
+            } while (takenPlaces.Contains(coordToTake) || maze[(int) coordToTake.x][(int) coordToTake.y] != 0);
+
+            maze[(int) coordToTake.x][(int) coordToTake.y] = 5;
+            takenPlaces.Add(coordToTake);
+            // Instantiate(PotionPrefab, new Vector3(coordToTake.y + 0.5f, (gameMaster.height - coordToTake.x) - 0.5f, 0),
+            //     Quaternion.identity, mazeObject.transform);
+        }
+    }
 }

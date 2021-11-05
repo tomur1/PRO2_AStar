@@ -58,7 +58,7 @@ public class Pathfinding {
                 pathNode.gCost = 99999999;
                 pathNode.CalculateFCost();
                 pathNode.cameFromNode = null;
-                if (GameMaster.Instance.maze[x][y] == 1)
+                if (GameMaster.Instance.maze[x][y] == 1 || GameMaster.Instance.maze[x][y] == 4)
                 {
                     pathNode.SetIsWalkable(false);
                 }

@@ -20,11 +20,12 @@ public class Bullet : MonoBehaviour
         yield return new WaitForSeconds(2f);
         Destroy(gameObject);
     }
-
+    
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (other.CompareTag("Enemy"))
         {
+            GameMaster.Instance.enemies.Remove(other.gameObject);
             Destroy(other.gameObject);
         }
         Destroy(gameObject);

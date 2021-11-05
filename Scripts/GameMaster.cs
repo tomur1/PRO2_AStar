@@ -9,11 +9,12 @@ using Random = System.Random;
 public class GameMaster : MonoBehaviour
 {
     public static GameMaster Instance;
-    
+
     // Start is called before the first frame update
     public int width;
     public int height;
     public int numberOfSpawners;
+    public int numberOfPotions;
     public List<int[]> maze;
     private GameObject mazeObject;
 
@@ -21,6 +22,8 @@ public class GameMaster : MonoBehaviour
     public GameObject StartPrefab;
     public GameObject EndPrefab;
     public GameObject SpawnerPrefab;
+    public GameObject PotionPrefab;
+    public GameObject EnemyPrefab;
     
     public GameObject StartDebug;
     public GameObject EndDebug;
@@ -31,8 +34,15 @@ public class GameMaster : MonoBehaviour
     public GameObject playerObject;
 
     public TextMeshProUGUI gameOverText;
+    public TextMeshProUGUI hpText;
+    public GameObject eqPanel;
+
+    public List<GameObject> enemies;
 
     private Dictionary<Vector2, GameObject> mazeElements;
+
+    public EquipmentManager eqManager;
+
 
     private void Awake()
     {
@@ -48,16 +58,55 @@ public class GameMaster : MonoBehaviour
 
     void Start()
     {
-        maze = TxtMazeConverter.ConvertToArray(Application.dataPath + "\\maze.txt");
         debugSteps = new List<GameObject>();
         mazeElements = new Dictionary<Vector2, GameObject>();
+        LoadValues();
+    }
+
+    void LoadGameFromFile(DataHolder data)
+    {
+        maze = data.maze;
+        foreach (var oldObjects in mazeElements.Values)
+        {
+            Destroy(oldObjects);
+        }
+        mazeElements.Clear();
+        
         height = maze.Count;
         width = maze[0].Length;
-        GenerateMazeObjects();
+        GenerateMazeObjects(false);
+        new Pathfinding();
+        
+        playerObject.transform.position = data.playerPosition;
+        playerObject.GetComponent<Health>().SetHealth(data.playerHealth);
+        eqManager.SetNumberOfPotions(data.playerPotions);
+
+        foreach (var oldEnemy in enemies)
+        {
+            Destroy(oldEnemy);
+        }
+        
+        enemies.Clear();
+
+        foreach (var enemyPosition in data.enemyPositions)
+        {
+            var enemy = Instantiate(EnemyPrefab, enemyPosition, Quaternion.identity);
+            enemies.Add(enemy);
+        }
+    }
+
+    void LoadValues()
+    {
+        maze = TxtMazeConverter.ConvertToArray(Application.dataPath + "\\maze.txt");
+        height = maze.Count;
+        width = maze[0].Length;
+        TxtMazeConverter.AddSpawners(maze, numberOfSpawners);
+        TxtMazeConverter.AddPotions(maze, numberOfPotions);
+        GenerateMazeObjects(true);
         new Pathfinding();
     }
 
-    void GenerateMazeObjects()
+    void GenerateMazeObjects(bool createPlayer)
     {
         //Create walls from txt file
         mazeObject = new GameObject("Maze");
@@ -69,51 +118,63 @@ public class GameMaster : MonoBehaviour
                 var value = list[j];
                 if (value == 1)
                 {
-                    mazeElements.Add(new Vector2(i,j), Instantiate(WallPrefab, new Vector3(j + 0.5f,  (height - i) - 0.5f, 0), Quaternion.identity, mazeObject.transform));
-                }else if (value == 2)
+                    mazeElements.Add(new Vector2(i, j),
+                        Instantiate(WallPrefab, new Vector3(j + 0.5f, (height - i) - 0.5f, 0), Quaternion.identity,
+                            mazeObject.transform));
+                }
+                else if (value == 2)
                 {
-                    mazeElements.Add(new Vector2(i,j), Instantiate(StartPrefab, new Vector3(j + 0.5f,  (height - i) - 0.5f, 0), Quaternion.identity, mazeObject.transform));
-                    playerObject = Instantiate(playerPrefab, new Vector3(j + 0.5f, (height - i) - 0.5f),
-                        Quaternion.identity);
-                }else if (value == 3)
+                    mazeElements.Add(new Vector2(i, j),
+                        Instantiate(StartPrefab, new Vector3(j + 0.5f, (height - i) - 0.5f, 0), Quaternion.identity,
+                            mazeObject.transform));
+                    if (createPlayer)
+                    {
+                        playerObject = Instantiate(playerPrefab, new Vector3(j + 0.5f, (height - i) - 0.5f),
+                            Quaternion.identity);    
+                    }
+                }
+                else if (value == 3)
                 {
-                    mazeElements.Add(new Vector2(i,j), Instantiate(EndPrefab, new Vector3(j + 0.5f,  (height - i) - 0.5f, 0), Quaternion.identity, mazeObject.transform));
+                    mazeElements.Add(new Vector2(i, j),
+                        Instantiate(EndPrefab, new Vector3(j + 0.5f, (height - i) - 0.5f, 0), Quaternion.identity,
+                            mazeObject.transform));
                 }
             }
         }
 
         GenerateSpawners();
+        GeneratePotions();
     }
- 
-    void GenerateSpawners()
-    {
-        List<Vector2> takenPlaces = new List<Vector2>();
-        var rand = new Random();
-        for (int i = 0; i < numberOfSpawners; i++)
-        {
-            // find a place
-            Vector2 coordToTake = new Vector2();
-            do
-            {
-                var x = rand.Next(2, width - 3);
-                var y = rand.Next(2, height - 3);
-                coordToTake = new Vector2(x, y);
-            } while (takenPlaces.Contains(coordToTake));
 
-            var coordsAround = CoordsAroundPoint(coordToTake);
-            foreach (var coordinateToClear in coordsAround)
+    private void GeneratePotions()
+    {
+        for (int i = 0; i < width; i++)
+        {
+            for (int j = 0; j < height; j++)
             {
-                var coordinateToClearInt = Vector2Int.FloorToInt(coordinateToClear);
-                maze[coordinateToClearInt.x][coordinateToClearInt.y] = 0;
-                if (mazeElements.ContainsKey(coordinateToClearInt))
+                if (maze[i][j] == 5)
                 {
-                    Destroy(mazeElements[coordinateToClearInt]);
-                    mazeElements.Remove(coordinateToClearInt);
+                    mazeElements.Add(new Vector2(i, j),
+                    Instantiate(PotionPrefab, new Vector3(j + 0.5f, (height - i) - 0.5f, 0),
+                            Quaternion.identity, mazeObject.transform));
                 }
             }
-            takenPlaces.Add(coordToTake);
-            mazeElements.Add(new Vector2(coordToTake.x,coordToTake.y), Instantiate(SpawnerPrefab, new Vector3(coordToTake.y + 0.5f,  (height - coordToTake.x) - 0.5f, 0), Quaternion.identity, mazeObject.transform));
-            maze[(int) coordToTake.x][(int) coordToTake.y] = 1;
+        }
+    }
+
+    void GenerateSpawners()
+    {
+        for (int i = 0; i < width; i++)
+        {
+            for (int j = 0; j < height; j++)
+            {
+                if (maze[i][j] == 4)
+                {
+                    mazeElements.Add(new Vector2(i, j),
+                        Instantiate(SpawnerPrefab, new Vector3(j + 0.5f, (height - i) - 0.5f, 0),
+                            Quaternion.identity, mazeObject.transform));
+                }
+            }
         }
     }
 
@@ -126,20 +187,21 @@ public class GameMaster : MonoBehaviour
     {
         var from = GetMazeCoord(fromObj.transform.position);
         var to = GetMazeCoord(toObj.transform.position);
-        var path= Pathfinding.Instance.FindPath(from, to);
-        
+        var path = Pathfinding.Instance.FindPath(from, to);
+
         foreach (var step in debugSteps)
         {
             Destroy(step);
         }
+
         debugSteps.Clear();
-        
+
         if (path == null)
         {
             Debug.Log("No path found");
             return;
         }
-        
+
         foreach (var coordToTake in path)
         {
             debugSteps.Add(Instantiate(DebugStep, new Vector3(coordToTake.y + 0.5f, (height - coordToTake.x) - 0.5f, 0),
@@ -151,14 +213,14 @@ public class GameMaster : MonoBehaviour
     {
         List<Vector2> coordsAround = new List<Vector2>();
         coordsAround.Add(point);
-        coordsAround.Add(point + new Vector2(-1,1));
-        coordsAround.Add(point + new Vector2(0,1));
-        coordsAround.Add(point + new Vector2(1,1));
-        coordsAround.Add(point + new Vector2(1,0));
-        coordsAround.Add(point - new Vector2(-1,1));
-        coordsAround.Add(point - new Vector2(0,1));
-        coordsAround.Add(point - new Vector2(1,1));
-        coordsAround.Add(point - new Vector2(1,0));
+        coordsAround.Add(point + new Vector2(-1, 1));
+        coordsAround.Add(point + new Vector2(0, 1));
+        coordsAround.Add(point + new Vector2(1, 1));
+        coordsAround.Add(point + new Vector2(1, 0));
+        coordsAround.Add(point - new Vector2(-1, 1));
+        coordsAround.Add(point - new Vector2(0, 1));
+        coordsAround.Add(point - new Vector2(1, 1));
+        coordsAround.Add(point - new Vector2(1, 0));
         return coordsAround;
     }
 
@@ -166,35 +228,36 @@ public class GameMaster : MonoBehaviour
     {
         return new Vector2(y, height - x);
     }
-    
+
     public Vector2 GetWorldPositionForUnit(int x, int y)
     {
         return new Vector2(y + 0.5f, (height - x) - 0.5f);
     }
-    
+
     public Vector2 GetMazeCoord(Vector2 worldPosition)
     {
         return new Vector2((width - worldPosition.y), worldPosition.x);
     }
-    
+
     public void ShowLines()
     {
         for (int i = 0; i < width; i++)
         {
             for (int j = 0; j < height; j++)
             {
-                Debug.DrawLine(GetWorldPosition(i,j), GetWorldPosition(i,j+1), Color.blue, Time.deltaTime);
-                Debug.DrawLine(GetWorldPosition(i,j), GetWorldPosition(i+1,j), Color.blue, Time.deltaTime);
+                Debug.DrawLine(GetWorldPosition(i, j), GetWorldPosition(i, j + 1), Color.blue, Time.deltaTime);
+                Debug.DrawLine(GetWorldPosition(i, j), GetWorldPosition(i + 1, j), Color.blue, Time.deltaTime);
                 var cell = maze[i][j];
-                if (cell != 0)
+                if (cell == 1 || cell == 4)
                 {
-                    Debug.DrawLine(GetWorldPosition(i,j), GetWorldPosition(i+1,j+1), Color.red, Time.deltaTime);
-                    Debug.DrawLine(GetWorldPosition(i,j+1), GetWorldPosition(i+1,j), Color.red, Time.deltaTime);
+                    Debug.DrawLine(GetWorldPosition(i, j), GetWorldPosition(i + 1, j + 1), Color.red, Time.deltaTime);
+                    Debug.DrawLine(GetWorldPosition(i, j + 1), GetWorldPosition(i + 1, j), Color.red, Time.deltaTime);
                 }
             }
         }
-        Debug.DrawLine(GetWorldPosition(0,height), GetWorldPosition(width,height), Color.blue, Time.deltaTime);
-        Debug.DrawLine(GetWorldPosition(width,0), GetWorldPosition(width,height), Color.blue, Time.deltaTime);
+
+        Debug.DrawLine(GetWorldPosition(0, height), GetWorldPosition(width, height), Color.blue, Time.deltaTime);
+        Debug.DrawLine(GetWorldPosition(width, 0), GetWorldPosition(width, height), Color.blue, Time.deltaTime);
     }
 
     private void PrintMaze(List<int[]> maze)
@@ -205,6 +268,7 @@ public class GameMaster : MonoBehaviour
             {
                 Console.Write(value);
             }
+
             Console.WriteLine();
         }
     }
@@ -213,6 +277,17 @@ public class GameMaster : MonoBehaviour
     void Update()
     {
         ShowLines();
+    }
+
+    public void LoadGame()
+    {
+        var data = DataSaver.LoadData();
+        LoadGameFromFile(data);
+    }
+
+    public void SaveGame()
+    {
+        DataSaver.SaveData();
     }
 
     public void EndGame()
@@ -225,5 +300,12 @@ public class GameMaster : MonoBehaviour
     {
         gameOverText.SetText("YOU WIN");
         EndGame();
+    }
+
+    public void PickedUpPotion(GameObject potion)
+    {
+        var mazeCoord = GetMazeCoord(potion.transform.position);
+        maze[(int) mazeCoord.x][(int) mazeCoord.y] = 0;
+        eqManager.PickedUpPotion();
     }
 }
